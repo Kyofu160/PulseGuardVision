@@ -1,922 +1,520 @@
-import {
-  PermissionsAndroid,
-  Platform,
-} from 'react-native';
-
+import { PermissionsAndroid, Platform } from 'react-native';
 import RNBluetoothClassic from 'react-native-bluetooth-classic';
 
 
-// =============================================
+// =====================================================
 // COMANDOS DO ARDUINO
-// =============================================
+// =====================================================
 
 export const COMANDOS = {
+  ALERTA_COMPLETO: 'DEMO|ALERTA|COMPLETO',
 
-  ALERTA_COMPLETO:
-    'DEMO|ALERTA|COMPLETO',
+  LED_PISCAR: 'DEMO|LED|PISCAR',
 
-  LED_PISCAR:
-    'DEMO|LED|PISCAR',
+  BUZZER_TOCAR: 'DEMO|BUZZER|TOCAR',
+  BUZZER_PARAR: 'DEMO|BUZZER|PARAR',
 
-  BUZZER_TOCAR:
-    'DEMO|BUZZER|TOCAR',
+  VIBRADOR_LIGAR: 'DEMO|VIBRADOR|LIGAR',
+  VIBRADOR_PARAR: 'DEMO|VIBRADOR|PARAR',
 
-  BUZZER_PARAR:
-    'DEMO|BUZZER|PARAR',
+  PARAR_TUDO: 'DEMO|PARAR',
 
-  VIBRADOR_LIGAR:
-    'DEMO|VIBRADOR|LIGAR',
-
-  VIBRADOR_PARAR:
-    'DEMO|VIBRADOR|PARAR',
-
-  PARAR_TUDO:
-    'DEMO|PARAR',
-
+  TESTE: 'TESTE',
 };
 
 
-// =============================================
-// DISPOSITIVO ATUAL
-// =============================================
+// =====================================================
+// DISPOSITIVO HC-05
+// =====================================================
 
 let dispositivoHC05 = null;
 
 
-// =============================================
-// ERRO PARA TEXTO
-// =============================================
+// =====================================================
+// PERMISSÃO BLUETOOTH
+// =====================================================
 
-function textoErro(erro) {
-
-  if (!erro) {
-    return 'Erro desconhecido.';
+async function pedirPermissaoBluetooth() {
+  if (Platform.OS !== 'android') {
+    return true;
   }
 
+  // Android 12+
+  if (Platform.Version >= 31) {
+    const resultado = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+      {
+        title: 'Permissão de Bluetooth',
+        message:
+          'O PulseGuardVision precisa acessar dispositivos Bluetooth pareados.',
+        buttonPositive: 'Permitir',
+        buttonNegative: 'Cancelar',
+      }
+    );
 
-  if (
-    typeof erro === 'string'
-  ) {
-
-    return erro;
-
+    return resultado === PermissionsAndroid.RESULTS.GRANTED;
   }
 
-
-  if (erro.message) {
-
-    return erro.message;
-
-  }
-
-
-  return String(erro);
-
+  return true;
 }
 
 
-// =============================================
-// PERMISSÃO BLUETOOTH
-// =============================================
+// =====================================================
+// VERIFICAR BLUETOOTH DO CELULAR
+// =====================================================
 
-async function pedirPermissaoBluetooth() {
-
-  if (
-    Platform.OS !== 'android'
-  ) {
-
-    return true;
-
-  }
-
-
-  const versaoAndroid =
-    Number(
-      Platform.Version
-    );
-
-
-  // Android 11 ou inferior
-
-  if (
-    versaoAndroid < 31
-  ) {
-
-    return true;
-
-  }
-
-
-  const permissao =
-    PermissionsAndroid
-      .PERMISSIONS
-      .BLUETOOTH_CONNECT;
-
-
+async function verificarBluetooth() {
   try {
+    const permitido = await pedirPermissaoBluetooth();
 
-    const jaPermitido =
-      await PermissionsAndroid.check(
-        permissao
-      );
-
-
-    if (jaPermitido) {
-
-      return true;
-
+    if (!permitido) {
+      return {
+        ok: false,
+        message: 'Permissão de Bluetooth não concedida.',
+      };
     }
 
+    const disponivel =
+      await RNBluetoothClassic.isBluetoothAvailable();
 
-    const resultado =
-      await PermissionsAndroid.request(
+    if (!disponivel) {
+      return {
+        ok: false,
+        message: 'Bluetooth não disponível neste aparelho.',
+      };
+    }
 
-        permissao,
+    const ligado =
+      await RNBluetoothClassic.isBluetoothEnabled();
 
-        {
-          title:
-            'Permissão para Bluetooth',
+    if (!ligado) {
+      return {
+        ok: false,
+        message: 'Bluetooth está desligado.',
+      };
+    }
 
-          message:
-            'O PulseGuardVision precisa acessar dispositivos Bluetooth próximos para se conectar ao HC-05.',
-
-          buttonPositive:
-            'Permitir',
-
-          buttonNegative:
-            'Cancelar',
-        }
-
-      );
-
-
-    return (
-      resultado ===
-      PermissionsAndroid.RESULTS.GRANTED
-    );
-
+    return {
+      ok: true,
+    };
   } catch (erro) {
-
     console.log(
-      'Erro ao solicitar permissão Bluetooth:',
+      'Erro ao verificar Bluetooth:',
       erro
     );
 
-
-    return false;
-
+    return {
+      ok: false,
+      message: 'Não foi possível verificar o Bluetooth.',
+    };
   }
-
 }
 
 
-// =============================================
-// VERIFICAR BLUETOOTH
-// =============================================
-
-async function verificarBluetooth() {
-
-  const permissao =
-    await pedirPermissaoBluetooth();
-
-
-  if (!permissao) {
-
-    return {
-
-      ok: false,
-
-      motivo:
-        'Permissão Bluetooth não autorizada.',
-
-    };
-
-  }
-
-
-  try {
-
-    const disponivel =
-      await RNBluetoothClassic
-        .isBluetoothAvailable();
-
-
-    if (!disponivel) {
-
-      return {
-
-        ok: false,
-
-        motivo:
-          'Bluetooth não disponível neste celular.',
-
-      };
-
-    }
-
-
-    const ligado =
-      await RNBluetoothClassic
-        .isBluetoothEnabled();
-
-
-    if (!ligado) {
-
-      return {
-
-        ok: false,
-
-        motivo:
-          'O Bluetooth do celular está desligado.',
-
-      };
-
-    }
-
-
-    return {
-
-      ok: true,
-
-    };
-
-  } catch (erro) {
-
-    return {
-
-      ok: false,
-
-      motivo:
-        'Não foi possível verificar o Bluetooth: ' +
-        textoErro(erro),
-
-    };
-
-  }
-
-}
-
-
-// =============================================
-// ENCONTRAR HC-05 PAREADO
-// =============================================
+// =====================================================
+// ENCONTRAR PAULIM02
+// =====================================================
 
 async function encontrarHC05() {
-
   try {
-
     const dispositivos =
-      await RNBluetoothClassic
-        .getBondedDevices();
+      await RNBluetoothClassic.getBondedDevices();
 
 
     console.log(
       'Dispositivos Bluetooth pareados:',
-      dispositivos.map(
-        dispositivo => ({
-          nome:
-            dispositivo.name,
-
-          endereco:
-            dispositivo.address,
-        })
-      )
+      dispositivos.map(dispositivo => ({
+        nome: dispositivo.name,
+        endereco: dispositivo.address,
+      }))
     );
 
 
-    const hc05 =
-      dispositivos.find(
-        dispositivo => {
-
-          const nome =
-            (
-              dispositivo.name ||
-              ''
-            )
-              .toUpperCase()
-              .replace(
-                /[^A-Z0-9]/g,
-                ''
-              );
-
-
-          return (
-            nome === 'HC05' ||
-            nome.includes('HC05')
-          );
-
-        }
-      );
-
-
-    if (!hc05) {
-
-      return {
-
-        ok: false,
-
-        motivo:
-          'HC-05 não encontrado entre os dispositivos pareados.',
-
-      };
-
-    }
-
-
-    return {
-
-      ok: true,
-
-      dispositivo:
-        hc05,
-
-    };
-
-  } catch (erro) {
-
-    return {
-
-      ok: false,
-
-      motivo:
-        'Não foi possível acessar os dispositivos pareados: ' +
-        textoErro(erro),
-
-    };
-
-  }
-
-}
-
-
-// =============================================
-// STATUS DO HC-05
-// =============================================
-
-export async function statusHC05() {
-
-  if (!dispositivoHC05) {
-
-    return {
-
-      conectado: false,
-
-    };
-
-  }
-
-
-  try {
-
-    const conectado =
-      await dispositivoHC05
-        .isConnected();
-
-
-    if (!conectado) {
-
-      dispositivoHC05 =
-        null;
-
-
-      return {
-
-        conectado: false,
-
-      };
-
-    }
-
-
-    return {
-
-      conectado: true,
-
-      nome:
-        dispositivoHC05.name,
-
-      endereco:
-        dispositivoHC05.address,
-
-    };
-
-  } catch (erro) {
-
-    dispositivoHC05 =
-      null;
-
-
-    return {
-
-      conectado: false,
-
-    };
-
-  }
-
-}
-
-
-// =============================================
-// CONECTAR AO HC-05
-// =============================================
-//
-// ESTA FUNÇÃO SÓ É EXECUTADA QUANDO:
-// 1. usuário toca em "Conectar HC-05"
-// 2. usuário toca em "Ativar Arduino agora"
-//
-// Não existe conexão automática ao abrir a página.
-// =============================================
-
-export async function conectarHC05() {
-
-  console.log(
-    'Tentando conectar ao HC-05...'
-  );
-
-
-  // ===========================================
-  // VERIFICAR BLUETOOTH
-  // ===========================================
-
-  const verificacao =
-    await verificarBluetooth();
-
-
-  if (!verificacao.ok) {
-
-    console.log(
-      verificacao.motivo
-    );
-
-
-    return {
-
-      ok: false,
-
-      simulado: true,
-
-      conectado: false,
-
-      message:
-        verificacao.motivo,
-
-    };
-
-  }
-
-
-  try {
-
-    // =========================================
-    // VERIFICAR SE JÁ EXISTE CONEXÃO
-    // =========================================
-
-    if (dispositivoHC05) {
-
-      try {
-
-        const conectado =
-          await dispositivoHC05
-            .isConnected();
-
-
-        if (conectado) {
-
-          console.log(
-            'HC-05 já está conectado.'
-          );
-
-
-          return {
-
-            ok: true,
-
-            simulado: false,
-
-            conectado: true,
-
-            nome:
-              dispositivoHC05.name,
-
-            endereco:
-              dispositivoHC05.address,
-
-            message:
-              'Comunicação Bluetooth ativa.',
-
-          };
-
-        }
-
-      } catch (erro) {
-
-        dispositivoHC05 =
-          null;
-
-      }
-
-    }
-
-
-    // =========================================
-    // PROCURAR HC-05 PAREADO
-    // =========================================
-
-    const encontrado =
-      await encontrarHC05();
-
-
-    if (!encontrado.ok) {
-
-      console.log(
-        encontrado.motivo
-      );
-
-
-      return {
-
-        ok: false,
-
-        simulado: true,
-
-        conectado: false,
-
-        message:
-          encontrado.motivo,
-
-      };
-
+    const dispositivoEncontrado =
+      dispositivos.find(dispositivo => {
+        const nome = (
+          dispositivo.name || ''
+        )
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, '');
+
+
+        console.log(
+          'Dispositivo encontrado:',
+          nome
+        );
+
+
+        return (
+          nome === 'PAULIM02' ||
+          nome === 'HC05' ||
+          nome === 'HC06'
+        );
+      });
+
+
+    if (!dispositivoEncontrado) {
+      return null;
     }
 
 
     dispositivoHC05 =
-      encontrado.dispositivo;
+      dispositivoEncontrado;
 
 
     console.log(
-      'HC-05 encontrado:',
+      'Paulim02 encontrado:',
       dispositivoHC05.name,
       dispositivoHC05.address
     );
 
 
-    // =========================================
-    // VERIFICAR SE JÁ ESTÁ CONECTADO
-    // =========================================
+    return dispositivoHC05;
+  } catch (erro) {
+    console.log(
+      'Erro ao procurar Paulim02:',
+      erro
+    );
 
-    const jaConectado =
-      await dispositivoHC05
-        .isConnected();
-
-
-    if (!jaConectado) {
-
-      console.log(
-        'Abrindo conexão Bluetooth...'
-      );
+    return null;
+  }
+}
 
 
-      const conectado =
-        await dispositivoHC05.connect({
+// =====================================================
+// VERIFICAR SE ESTÁ CONECTADO
+// =====================================================
 
-          CONNECTOR_TYPE:
-            'rfcomm',
-
-          CONNECTION_TYPE:
-            'delimited',
-
-          DELIMITER:
-            '\n',
-
-          DEVICE_CHARSET:
-            'utf-8',
-
-        });
-
-
-      if (!conectado) {
-
-        throw new Error(
-          'O HC-05 foi encontrado, mas a conexão não foi estabelecida.'
-        );
-
-      }
-
+export async function statusHC05() {
+  try {
+    if (!dispositivoHC05) {
+      return {
+        conectado: false,
+      };
     }
 
 
-    console.log(
-      'HC-05 conectado com sucesso.'
-    );
+    const conectado =
+      await dispositivoHC05.isConnected();
 
 
     return {
-
-      ok: true,
-
-      simulado: false,
-
-      conectado: true,
-
-      nome:
-        dispositivoHC05.name,
-
-      endereco:
-        dispositivoHC05.address,
-
-      message:
-        'Comunicação Bluetooth ativa.',
-
+      conectado,
+      nome: dispositivoHC05.name,
+      endereco: dispositivoHC05.address,
     };
-
   } catch (erro) {
-
     console.log(
-      'Erro ao conectar HC-05:',
+      'Erro ao verificar conexão:',
       erro
     );
 
 
-    dispositivoHC05 =
-      null;
+    dispositivoHC05 = null;
 
 
     return {
-
-      ok: false,
-
-      simulado: true,
-
       conectado: false,
-
-      message:
-        'Não foi possível conectar ao HC-05: ' +
-        textoErro(erro),
-
     };
-
   }
-
 }
 
 
-// =============================================
-// DESCONECTAR HC-05
-// =============================================
+// =====================================================
+// CONECTAR AO PAULIM02
+// =====================================================
 
-export async function desconectarHC05() {
-
-  if (!dispositivoHC05) {
-
-    return {
-
-      ok: true,
-
-      conectado: false,
-
-      message:
-        'HC-05 não conectado.',
-
-    };
-
-  }
-
-
+export async function conectarHC05() {
   try {
+    console.log(
+      'Tentando conectar ao Paulim02...'
+    );
+
+
+    // -------------------------------------------------
+    // Verificar Bluetooth do celular
+    // -------------------------------------------------
+
+    const verificacao =
+      await verificarBluetooth();
+
+
+    if (!verificacao.ok) {
+      return {
+        ok: false,
+        conectado: false,
+        message: verificacao.message,
+      };
+    }
+
+
+    // -------------------------------------------------
+    // Já temos um dispositivo salvo?
+    // -------------------------------------------------
+
+    if (dispositivoHC05) {
+      try {
+        const jaConectado =
+          await dispositivoHC05.isConnected();
+
+
+        if (jaConectado) {
+          return {
+            ok: true,
+            conectado: true,
+            nome: dispositivoHC05.name,
+            message: `${dispositivoHC05.name} já está conectado.`,
+          };
+        }
+      } catch (erro) {
+        dispositivoHC05 = null;
+      }
+    }
+
+
+    // -------------------------------------------------
+    // Procurar entre os dispositivos pareados
+    // -------------------------------------------------
+
+    const dispositivo =
+      await encontrarHC05();
+
+
+    if (!dispositivo) {
+      return {
+        ok: false,
+        conectado: false,
+        message:
+          'Paulim02 não foi encontrado entre os dispositivos pareados.',
+      };
+    }
+
+
+    console.log(
+      'Conectando em:',
+      dispositivo.name
+    );
+
+
+    // -------------------------------------------------
+    // Conexão Bluetooth Classic RFCOMM / SPP
+    // -------------------------------------------------
+
+    await dispositivo.connect({
+      CONNECTOR_TYPE: 'rfcomm',
+
+      CONNECTION_TYPE: 'delimited',
+
+      DELIMITER: '\n',
+
+      DEVICE_CHARSET: 'utf-8',
+    });
+
+
+    // -------------------------------------------------
+    // Confirmar conexão
+    // -------------------------------------------------
 
     const conectado =
-      await dispositivoHC05
-        .isConnected();
+      await dispositivo.isConnected();
+
+
+    if (!conectado) {
+      dispositivoHC05 = null;
+
+
+      return {
+        ok: false,
+        conectado: false,
+        message:
+          'O Paulim02 foi encontrado, mas a conexão não foi concluída.',
+      };
+    }
+
+
+    dispositivoHC05 =
+      dispositivo;
+
+
+    console.log(
+      'Paulim02 conectado com sucesso!'
+    );
+
+
+    return {
+      ok: true,
+      conectado: true,
+      nome: dispositivo.name,
+      endereco: dispositivo.address,
+      message: `${dispositivo.name} conectado.`,
+    };
+  } catch (erro) {
+    console.log(
+      'Erro ao conectar ao Paulim02:',
+      erro
+    );
+
+
+    dispositivoHC05 = null;
+
+
+    return {
+      ok: false,
+      conectado: false,
+      message:
+        'Não foi possível conectar ao Paulim02.',
+      erro: String(erro),
+    };
+  }
+}
+
+
+// =====================================================
+// DESCONECTAR
+// =====================================================
+
+export async function desconectarHC05() {
+  try {
+    if (!dispositivoHC05) {
+      return {
+        ok: true,
+        conectado: false,
+        message: 'Bluetooth já está desconectado.',
+      };
+    }
+
+
+    const conectado =
+      await dispositivoHC05.isConnected();
 
 
     if (conectado) {
-
-      await dispositivoHC05
-        .disconnect();
-
+      await dispositivoHC05.disconnect();
     }
 
 
-    dispositivoHC05 =
-      null;
-
-
     console.log(
-      'HC-05 desconectado manualmente.'
+      'Paulim02 desconectado.'
     );
 
 
+    dispositivoHC05 = null;
+
+
     return {
-
       ok: true,
-
       conectado: false,
-
-      message:
-        'HC-05 desconectado.',
-
+      message: 'Paulim02 desconectado.',
     };
-
   } catch (erro) {
-
     console.log(
-      'Erro ao desconectar HC-05:',
+      'Erro ao desconectar:',
       erro
     );
 
 
-    dispositivoHC05 =
-      null;
+    dispositivoHC05 = null;
 
 
     return {
-
       ok: false,
-
       conectado: false,
-
       message:
-        'Erro ao desconectar: ' +
-        textoErro(erro),
-
+        'Erro ao desconectar o Paulim02.',
+      erro: String(erro),
     };
-
   }
-
 }
 
 
-// =============================================
+// =====================================================
 // ENVIAR COMANDO AO ARDUINO
-// =============================================
-//
-// conectarSeNecessario = true
-// somente quando "Ativar Arduino agora"
-// for pressionado.
-//
-// Nos outros comandos NÃO reconecta sozinho.
-// =============================================
+// =====================================================
 
 export async function enviarComandoArduino(
   comando,
   conectarSeNecessario = false
 ) {
-
-  console.log(
-    '================================='
-  );
-
-  console.log(
-    'COMANDO PARA O ARDUINO'
-  );
-
-  console.log(
-    comando
-  );
-
-  console.log(
-    '================================='
-  );
-
-
   try {
-
-    // =========================================
-    // VERIFICAR SE ESTÁ CONECTADO
-    // =========================================
-
     let conectado = false;
 
 
+    // -------------------------------------------------
+    // Verificar conexão atual
+    // -------------------------------------------------
+
     if (dispositivoHC05) {
-
       try {
-
         conectado =
-          await dispositivoHC05
-            .isConnected();
-
+          await dispositivoHC05.isConnected();
       } catch (erro) {
-
-        conectado =
-          false;
-
-        dispositivoHC05 =
-          null;
-
+        conectado = false;
+        dispositivoHC05 = null;
       }
-
     }
 
 
-    // =========================================
-    // PODE CONECTAR AUTOMATICAMENTE?
-    // =========================================
-    //
-    // Isso só acontece quando a Página 3
-    // envia "true", que será somente no botão
-    // Ativar Arduino.
-    // =========================================
+    // -------------------------------------------------
+    // Conectar somente quando solicitado
+    // -------------------------------------------------
 
     if (
       !conectado &&
       conectarSeNecessario
     ) {
-
-      const conexao =
+      const resultadoConexao =
         await conectarHC05();
 
 
-      if (
-        conexao.ok &&
-        conexao.simulado === false
-      ) {
-
-        conectado =
-          true;
-
-      } else {
-
-        console.log(
-          'HC-05 indisponível. Usando simulação.'
-        );
-
-
-        return {
-
-          ok: true,
-
-          simulado: true,
-
-          conectado: false,
-
-          comando,
-
-          message:
-            conexao.message ||
-            'HC-05 não conectado. Usando modo de simulação.',
-
-        };
-
+      if (resultadoConexao.ok) {
+        conectado = true;
       }
-
     }
 
 
-    // =========================================
-    // NÃO ESTÁ CONECTADO
-    // E NÃO PODE CONECTAR AUTOMATICAMENTE
-    // =========================================
+    // -------------------------------------------------
+    // Sem Bluetooth = simulação
+    // -------------------------------------------------
 
-    if (!conectado) {
+    if (
+      !conectado ||
+      !dispositivoHC05
+    ) {
+      console.log(
+        'Arduino não conectado. Simulando:',
+        comando
+      );
+
 
       return {
-
         ok: true,
-
+        enviado: false,
         simulado: true,
-
-        conectado: false,
-
         comando,
-
         message:
-          'HC-05 não conectado. Usando modo de simulação.',
-
+          'Paulim02 não conectado. Comando simulado.',
       };
-
     }
 
 
-    // =========================================
-    // ENVIAR
-    // =========================================
+    // -------------------------------------------------
+    // Enviar comando
+    // -------------------------------------------------
 
     const mensagem =
-      comando + '\n';
+      `${comando}\n`;
 
 
     console.log(
-      'Enviando para HC-05:',
-      mensagem
+      'Enviando para o Arduino:',
+      comando
     );
 
 
-    const enviado =
-      await dispositivoHC05.write(
-        mensagem,
-        'utf-8'
-      );
-
-
-    if (!enviado) {
-
-      throw new Error(
-        'O HC-05 não confirmou o envio.'
-      );
-
-    }
+    await dispositivoHC05.write(
+      mensagem,
+      'utf-8'
+    );
 
 
     console.log(
@@ -925,49 +523,31 @@ export async function enviarComandoArduino(
 
 
     return {
-
       ok: true,
-
+      enviado: true,
       simulado: false,
-
-      conectado: true,
-
       comando,
-
       message:
         'Comando enviado ao Arduino.',
-
     };
-
   } catch (erro) {
-
     console.log(
-      'Erro no envio Bluetooth:',
+      'Erro ao enviar comando:',
       erro
     );
 
 
-    dispositivoHC05 =
-      null;
+    dispositivoHC05 = null;
 
 
     return {
-
-      ok: true,
-
+      ok: false,
+      enviado: false,
       simulado: true,
-
-      conectado: false,
-
       comando,
-
       message:
-        'Falha na comunicação Bluetooth: ' +
-        textoErro(erro) +
-        ' Simulação mantida.',
-
+        'Erro na comunicação com o Paulim02.',
+      erro: String(erro),
     };
-
   }
-
 }

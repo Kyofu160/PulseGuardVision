@@ -8,27 +8,151 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  TextInput,
   ScrollView,
+  Pressable,
+  TextInput,
 } from 'react-native';
 
 import {
   useHorarios,
 } from './HorariosContext';
 
-import * as ArduinoBridge from './ArduinoBridge';
-
-
-const {
+import {
   COMANDOS,
+  conectarHC05,
+  desconectarHC05,
   enviarComandoArduino,
-} = ArduinoBridge;
+  statusHC05,
+} from './ArduinoBridge';
 
 
-// =============================================
-// PÁGINA DE DEMONSTRAÇÃO
-// =============================================
+// =====================================================
+// TEMPO DA DEMONSTRAÇÃO
+// =====================================================
+
+// Servo:
+// aproximadamente 1,2 segundo.
+//
+// Alerta:
+// aproximadamente 4 segundos.
+//
+// Colocamos 6 segundos no app para deixar
+// uma pequena margem para a comunicação Bluetooth.
+
+const TEMPO_TOTAL_DEMO = 6000;
+
+
+// =====================================================
+// OPÇÕES DA DEMONSTRAÇÃO
+// =====================================================
+
+const CORES_LED = [
+  {
+    nome: 'Vermelho',
+    r: 255,
+    g: 0,
+    b: 0,
+    cor: '#EF4444',
+  },
+  {
+    nome: 'Verde',
+    r: 0,
+    g: 255,
+    b: 0,
+    cor: '#22C55E',
+  },
+  {
+    nome: 'Azul',
+    r: 0,
+    g: 0,
+    b: 255,
+    cor: '#3B82F6',
+  },
+  {
+    nome: 'Amarelo',
+    r: 255,
+    g: 255,
+    b: 0,
+    cor: '#EAB308',
+  },
+  {
+    nome: 'Ciano',
+    r: 0,
+    g: 255,
+    b: 255,
+    cor: '#06B6D4',
+  },
+  {
+    nome: 'Roxo',
+    r: 180,
+    g: 0,
+    b: 255,
+    cor: '#A855F7',
+  },
+  {
+    nome: 'Laranja',
+    r: 255,
+    g: 90,
+    b: 0,
+    cor: '#F97316',
+  },
+  {
+    nome: 'Branco',
+    r: 255,
+    g: 255,
+    b: 255,
+    cor: '#FFFFFF',
+  },
+];
+
+
+const TONS_BUZZER = [
+  {
+    nome: 'Muito grave',
+    frequencia: 180,
+  },
+  {
+    nome: 'Grave',
+    frequencia: 262,
+  },
+  {
+    nome: 'Médio',
+    frequencia: 467,
+  },
+  {
+    nome: 'Agudo',
+    frequencia: 880,
+  },
+  {
+    nome: 'Muito agudo',
+    frequencia: 1400,
+  },
+];
+
+
+const VIBRACOES = [
+  {
+    nome: 'Pulsar',
+    codigo: 'PULSAR',
+  },
+  {
+    nome: 'Seguir',
+    codigo: 'SEGUIR',
+  },
+  {
+    nome: 'Longa',
+    codigo: 'LONGA',
+  },
+  {
+    nome: 'Rápida',
+    codigo: 'RAPIDA',
+  },
+];
+
+
+// =====================================================
+// PÁGINA
+// =====================================================
 
 export default function PaginaTres() {
 
@@ -37,570 +161,149 @@ export default function PaginaTres() {
   } = useHorarios();
 
 
-  // ===========================================
-  // TEMPO
-  // ===========================================
-
-  const [minutosInput, setMinutosInput] =
-    useState('0');
-
-  const [segundosInput, setSegundosInput] =
-    useState('10');
-
-  const [tempoTotal, setTempoTotal] =
-    useState(10);
-
-  const [tempoRestante, setTempoRestante] =
-    useState(10);
-
-  const [rodando, setRodando] =
-    useState(false);
-
-
-  // ===========================================
-  // ESTADO DO ARDUINO
-  // ===========================================
-
-  const [arduinoAtivo, setArduinoAtivo] =
-    useState(false);
-
-  const [ledLigado, setLedLigado] =
-    useState(false);
-
-  const [buzzerLigado, setBuzzerLigado] =
-    useState(false);
-
-  const [vibradorLigado, setVibradorLigado] =
-    useState(false);
-
-
-  // ===========================================
+  // ===================================================
   // BLUETOOTH
-  // ===========================================
-
-  const [bluetoothReal, setBluetoothReal] =
-    useState(false);
+  // ===================================================
 
   const [
-    conectandoBluetooth,
-    setConectandoBluetooth,
-  ] =
-    useState(false);
+    conectado,
+    setConectado,
+  ] = useState(false);
 
   const [
     mensagemBluetooth,
     setMensagemBluetooth,
-  ] =
-    useState(
-      'HC-05 não conectado'
-    );
+  ] = useState(
+    'Paulim02 desconectado'
+  );
 
 
-  // ===========================================
-  // REFERÊNCIAS
-  // ===========================================
+  // ===================================================
+  // ESTADO DA DEMONSTRAÇÃO
+  // ===================================================
 
-  const intervaloLed =
-    useRef(null);
+  const [
+    arduinoAtivo,
+    setArduinoAtivo,
+  ] = useState(false);
+
+  const [
+    ledAtivo,
+    setLedAtivo,
+  ] = useState(false);
+
+  const [
+    buzzerAtivo,
+    setBuzzerAtivo,
+  ] = useState(false);
+
+  const [
+    vibracaoAtiva,
+    setVibracaoAtiva,
+  ] = useState(false);
+
+
+  // ===================================================
+  // CONFIGURAÇÕES
+  // ===================================================
+
+  const [
+    indiceCor,
+    setIndiceCor,
+  ] = useState(0);
+
+  const [
+    indiceTom,
+    setIndiceTom,
+  ] = useState(2);
+
+  const [
+    indiceVibracao,
+    setIndiceVibracao,
+  ] = useState(0);
+
+
+  const corSelecionada =
+    CORES_LED[indiceCor];
+
+  const tomSelecionado =
+    TONS_BUZZER[indiceTom];
+
+  const vibracaoSelecionada =
+    VIBRACOES[indiceVibracao];
+
+
+  // ===================================================
+  // CRONÔMETRO
+  // ===================================================
+
+  const [
+    minutos,
+    setMinutos,
+  ] = useState('0');
+
+  const [
+    segundos,
+    setSegundos,
+  ] = useState('10');
+
+  const [
+    tempoRestante,
+    setTempoRestante,
+  ] = useState(10);
+
+  const [
+    rodando,
+    setRodando,
+  ] = useState(false);
+
 
   const timeoutAlerta =
     useRef(null);
 
 
-  // ===========================================
-  // FORMATAR TEMPO
-  // ===========================================
+  // ===================================================
+  // VERIFICAR STATUS
+  // ===================================================
 
-  function formatarTempo(segundos) {
+  useEffect(() => {
 
-    const minutos =
-      Math.floor(
-        segundos / 60
-      );
+    async function verificar() {
 
-    const segundosRestantes =
-      segundos % 60;
+      try {
 
+        const resultado =
+          await statusHC05();
 
-    return (
-      String(minutos)
-        .padStart(2, '0') +
-      ':' +
-      String(segundosRestantes)
-        .padStart(2, '0')
-    );
-
-  }
-
-
-  // ===========================================
-  // ATUALIZAR STATUS BLUETOOTH
-  // ===========================================
-
-  function atualizarStatusBluetooth(
-    resultado
-  ) {
-
-    if (!resultado) {
-      return;
-    }
-
-
-    if (
-      resultado.simulado === false ||
-      resultado.conectado === true
-    ) {
-
-      setBluetoothReal(true);
-
-      setMensagemBluetooth(
-        'Comunicação Bluetooth ativa'
-      );
-
-      return;
-
-    }
-
-
-    setBluetoothReal(false);
-
-    setMensagemBluetooth(
-      resultado.message ||
-      'HC-05 não conectado'
-    );
-
-  }
-
-
-  // ===========================================
-  // DESLIGAR SIMULAÇÃO
-  // ===========================================
-
-  function desligarSimulacao() {
-
-    if (
-      intervaloLed.current
-    ) {
-
-      clearInterval(
-        intervaloLed.current
-      );
-
-      intervaloLed.current =
-        null;
-
-    }
-
-
-    if (
-      timeoutAlerta.current
-    ) {
-
-      clearTimeout(
-        timeoutAlerta.current
-      );
-
-      timeoutAlerta.current =
-        null;
-
-    }
-
-
-    setArduinoAtivo(false);
-
-    setLedLigado(false);
-
-    setBuzzerLigado(false);
-
-    setVibradorLigado(false);
-
-  }
-
-
-  // ===========================================
-  // ATIVAR SIMULAÇÃO VISUAL
-  // ===========================================
-
-  function iniciarSimulacaoVisual() {
-
-    if (
-      intervaloLed.current
-    ) {
-
-      clearInterval(
-        intervaloLed.current
-      );
-
-    }
-
-
-    if (
-      timeoutAlerta.current
-    ) {
-
-      clearTimeout(
-        timeoutAlerta.current
-      );
-
-    }
-
-
-    setArduinoAtivo(true);
-
-    setLedLigado(true);
-
-    setBuzzerLigado(true);
-
-    setVibradorLigado(true);
-
-
-    // LED piscando
-
-    intervaloLed.current =
-      setInterval(() => {
-
-        setLedLigado(
-          anterior =>
-            !anterior
-        );
-
-      }, 400);
-
-
-    // Desliga após 4 segundos
-
-    timeoutAlerta.current =
-      setTimeout(() => {
-
-        desligarSimulacao();
-
-      }, 4000);
-
-  }
-
-
-  // ===========================================
-  // ATIVAR ARDUINO
-  // ===========================================
-  //
-  // Só permite criar conexão quando:
-  //
-  // permitirConexao = true
-  //
-  // Isso acontece somente ao clicar em
-  // "Ativar Arduino agora".
-  //
-  // O cronômetro chama com false.
-  // ===========================================
-
-  async function ativarArduino(
-    permitirConexao = true
-  ) {
-
-    iniciarSimulacaoVisual();
-
-
-    try {
-
-      if (
-        permitirConexao &&
-        !bluetoothReal
-      ) {
-
-        setMensagemBluetooth(
-          'Tentando conectar ao HC-05...'
-        );
-
-      }
-
-
-      const resultado =
-        await enviarComandoArduino(
-          COMANDOS.ALERTA_COMPLETO,
-          permitirConexao
-        );
-
-
-      atualizarStatusBluetooth(
-        resultado
-      );
-
-
-      console.log(
-        'Resultado Arduino:',
-        resultado
-      );
-
-    } catch (erro) {
-
-      console.log(
-        'Erro ao ativar Arduino:',
-        erro
-      );
-
-
-      setBluetoothReal(false);
-
-      setMensagemBluetooth(
-        'Falha na comunicação. Simulação ativa.'
-      );
-
-    }
-
-  }
-
-
-  // ===========================================
-  // CONECTAR / DESCONECTAR HC-05
-  // ===========================================
-
-  async function alternarConexaoHC05() {
-
-    if (
-      conectandoBluetooth
-    ) {
-
-      return;
-
-    }
-
-
-    setConectandoBluetooth(true);
-
-
-    try {
-
-      // =======================================
-      // DESCONECTAR
-      // =======================================
-
-      if (bluetoothReal) {
 
         if (
-          typeof ArduinoBridge.desconectarHC05 ===
-          'function'
+          resultado?.conectado
         ) {
 
-          const resultado =
-            await ArduinoBridge
-              .desconectarHC05();
+          setConectado(true);
 
-
-          console.log(
-            'Resultado desconexão HC-05:',
-            resultado
+          setMensagemBluetooth(
+            `${
+              resultado.nome ||
+              'Paulim02'
+            } conectado`
           );
 
         }
 
+      } catch (erro) {
 
-        setBluetoothReal(false);
-
-        setMensagemBluetooth(
-          'HC-05 desconectado.'
-        );
-
-
-        return;
+        // Não conecta automaticamente.
 
       }
 
-
-      // =======================================
-      // CONECTAR
-      // =======================================
-
-      if (
-        typeof ArduinoBridge.conectarHC05 !==
-        'function'
-      ) {
-
-        setBluetoothReal(false);
-
-        setMensagemBluetooth(
-          'Bluetooth real indisponível nesta plataforma.'
-        );
-
-
-        return;
-
-      }
-
-
-      setMensagemBluetooth(
-        'Conectando ao HC-05...'
-      );
-
-
-      const resultado =
-        await ArduinoBridge
-          .conectarHC05();
-
-
-      if (
-        resultado &&
-        resultado.ok &&
-        resultado.simulado === false
-      ) {
-
-        setBluetoothReal(true);
-
-        setMensagemBluetooth(
-          'Comunicação Bluetooth ativa'
-        );
-
-      } else {
-
-        setBluetoothReal(false);
-
-        setMensagemBluetooth(
-          resultado?.message ||
-          'Não foi possível conectar ao HC-05.'
-        );
-
-      }
-
-
-      console.log(
-        'Resultado conexão HC-05:',
-        resultado
-      );
-
-    } catch (erro) {
-
-      console.log(
-        'Erro ao alterar conexão HC-05:',
-        erro
-      );
-
-
-      setBluetoothReal(false);
-
-      setMensagemBluetooth(
-        'Não foi possível conectar ao HC-05.'
-      );
-
-    } finally {
-
-      setConectandoBluetooth(false);
-
-    }
-
-  }
-
-
-  // ===========================================
-  // PARAR ARDUINO
-  // ===========================================
-
-  async function pararArduino() {
-
-    desligarSimulacao();
-
-
-    try {
-
-      const resultado =
-        await enviarComandoArduino(
-          COMANDOS.PARAR_TUDO,
-          false
-        );
-
-
-      atualizarStatusBluetooth(
-        resultado
-      );
-
-
-      console.log(
-        'Resultado parar Arduino:',
-        resultado
-      );
-
-    } catch (erro) {
-
-      console.log(
-        'Erro ao parar Arduino:',
-        erro
-      );
-
-    }
-
-  }
-
-
-  // ===========================================
-  // CRONÔMETRO
-  // ===========================================
-
-  useEffect(() => {
-
-    if (!rodando) {
-      return;
     }
 
 
-    if (
-      tempoRestante <= 0
-    ) {
-
-      setRodando(false);
-
-
-      // Não cria conexão automaticamente.
-      // Se já estiver conectado, envia.
-      // Senão fica em simulação.
-
-      ativarArduino(false);
-
-      return;
-    }
-
-
-    const timer =
-      setTimeout(() => {
-
-        setTempoRestante(
-          anterior =>
-            Math.max(
-              anterior - 1,
-              0
-            )
-        );
-
-      }, 1000);
+    verificar();
 
 
     return () => {
-
-      clearTimeout(timer);
-
-    };
-
-  }, [
-    rodando,
-    tempoRestante,
-  ]);
-
-
-  // ===========================================
-  // LIMPEZA
-  // ===========================================
-
-  useEffect(() => {
-
-    return () => {
-
-      if (
-        intervaloLed.current
-      ) {
-
-        clearInterval(
-          intervaloLed.current
-        );
-
-      }
-
 
       if (
         timeoutAlerta.current
@@ -617,479 +320,512 @@ export default function PaginaTres() {
   }, []);
 
 
-  // ===========================================
+  // ===================================================
+  // TROCAR COR
+  // ===================================================
+
+  function proximaCor() {
+
+    if (arduinoAtivo)
+      return;
+
+
+    setIndiceCor(
+      atual =>
+        (atual + 1) %
+        CORES_LED.length
+    );
+
+  }
+
+
+  // ===================================================
+  // TROCAR TOM
+  // ===================================================
+
+  function proximoTom() {
+
+    if (arduinoAtivo)
+      return;
+
+
+    setIndiceTom(
+      atual =>
+        (atual + 1) %
+        TONS_BUZZER.length
+    );
+
+  }
+
+
+  // ===================================================
+  // TROCAR VIBRAÇÃO
+  // ===================================================
+
+  function proximaVibracao() {
+
+    if (arduinoAtivo)
+      return;
+
+
+    setIndiceVibracao(
+      atual =>
+        (atual + 1) %
+        VIBRACOES.length
+    );
+
+  }
+
+
+  // ===================================================
+  // COMANDO DA DEMONSTRAÇÃO
+  // ===================================================
+
+  function montarComando() {
+
+    return (
+      'DEMO|ALERTA|CONFIG|' +
+      corSelecionada.r +
+      '|' +
+      corSelecionada.g +
+      '|' +
+      corSelecionada.b +
+      '|' +
+      tomSelecionado.frequencia +
+      '|' +
+      vibracaoSelecionada.codigo
+    );
+
+  }
+
+
+  // ===================================================
+  // ATIVAR ARDUINO
+  // ===================================================
+
+  async function ativarArduino(
+    conectarSeNecessario = true
+  ) {
+
+    // Remove qualquer temporizador
+    // de uma demonstração anterior.
+
+    if (
+      timeoutAlerta.current
+    ) {
+
+      clearTimeout(
+        timeoutAlerta.current
+      );
+
+      timeoutAlerta.current =
+        null;
+
+    }
+
+
+    const comando =
+      montarComando();
+
+
+    const resultado =
+      await enviarComandoArduino(
+        comando,
+        conectarSeNecessario
+      );
+
+
+    if (
+      resultado?.enviado
+    ) {
+
+      setConectado(true);
+
+      setMensagemBluetooth(
+        'Paulim02 conectado'
+      );
+
+    }
+
+
+    // O Arduino inteiro está ativo,
+    // incluindo o tempo do servo.
+
+    setArduinoAtivo(true);
+
+    setLedAtivo(true);
+
+    setBuzzerAtivo(true);
+
+    setVibracaoAtiva(true);
+
+
+    // =================================================
+    // IMPORTANTE:
+    //
+    // Não são mais apenas 4 segundos.
+    //
+    // O aplicativo espera também o tempo do servo,
+    // mantendo "Parar Arduino" disponível durante
+    // toda a demonstração.
+    // =================================================
+
+    timeoutAlerta.current =
+      setTimeout(() => {
+
+        setArduinoAtivo(false);
+
+        setLedAtivo(false);
+
+        setBuzzerAtivo(false);
+
+        setVibracaoAtiva(false);
+
+        timeoutAlerta.current =
+          null;
+
+      }, TEMPO_TOTAL_DEMO);
+
+  }
+
+
+  // ===================================================
+  // PARAR ARDUINO
+  // ===================================================
+
+  async function pararArduino() {
+
+    // Primeiro cancela o temporizador do aplicativo.
+
+    if (
+      timeoutAlerta.current
+    ) {
+
+      clearTimeout(
+        timeoutAlerta.current
+      );
+
+      timeoutAlerta.current =
+        null;
+
+    }
+
+
+    // Depois manda o Arduino parar imediatamente.
+
+    await enviarComandoArduino(
+      COMANDOS.PARAR_TUDO,
+      false
+    );
+
+
+    // Interface volta ao estado inicial.
+
+    setArduinoAtivo(false);
+
+    setLedAtivo(false);
+
+    setBuzzerAtivo(false);
+
+    setVibracaoAtiva(false);
+
+  }
+
+
+  // ===================================================
+  // CONECTAR BLUETOOTH
+  // ===================================================
+
+  async function conectar() {
+
+    setMensagemBluetooth(
+      'Conectando ao Paulim02...'
+    );
+
+
+    const resultado =
+      await conectarHC05();
+
+
+    if (
+      resultado?.ok &&
+      resultado?.conectado
+    ) {
+
+      setConectado(true);
+
+      setMensagemBluetooth(
+        `${
+          resultado.nome ||
+          'Paulim02'
+        } conectado`
+      );
+
+      return;
+
+    }
+
+
+    setConectado(false);
+
+    setMensagemBluetooth(
+      resultado?.message ||
+      'Não foi possível conectar'
+    );
+
+  }
+
+
+  // ===================================================
+  // DESCONECTAR BLUETOOTH
+  // ===================================================
+
+  async function desconectar() {
+
+    // Se o Arduino estiver em uma demonstração,
+    // manda parar antes de desconectar.
+
+    if (arduinoAtivo) {
+
+      await pararArduino();
+
+    }
+
+
+    await desconectarHC05();
+
+
+    setConectado(false);
+
+    setMensagemBluetooth(
+      'Paulim02 desconectado'
+    );
+
+  }
+
+
+  // ===================================================
   // APLICAR TEMPO
-  // ===========================================
+  // ===================================================
 
   function aplicarTempo() {
 
-    let minutos =
-      parseInt(
-        minutosInput,
-        10
-      );
-
-    let segundos =
-      parseInt(
-        segundosInput,
-        10
-      );
-
-
-    if (
-      Number.isNaN(minutos)
-    ) {
-
-      minutos = 0;
-
-    }
-
-
-    if (
-      Number.isNaN(segundos)
-    ) {
-
-      segundos = 0;
-
-    }
-
-
-    minutos =
+    const min =
       Math.max(
-        minutos,
-        0
+        0,
+        Number(minutos) || 0
       );
 
-    segundos =
+    const seg =
       Math.max(
-        segundos,
-        0
+        0,
+        Number(segundos) || 0
       );
 
 
     const total =
-      (
-        minutos * 60
-      ) +
-      segundos;
+      min * 60 + seg;
 
 
-    setTempoTotal(
-      total
-    );
-
-    setTempoRestante(
-      total
-    );
+    setTempoRestante(total);
 
     setRodando(false);
 
   }
 
 
-  // ===========================================
+  // ===================================================
   // TEMPOS RÁPIDOS
-  // ===========================================
+  // ===================================================
 
-  function aplicarAtalho(segundos) {
+  function tempoRapido(
+    total
+  ) {
 
-    setTempoTotal(
-      segundos
-    );
-
-    setTempoRestante(
-      segundos
-    );
+    setTempoRestante(total);
 
     setRodando(false);
 
 
-    const minutos =
-      Math.floor(
-        segundos / 60
+    setMinutos(
+      String(
+        Math.floor(
+          total / 60
+        )
+      )
+    );
+
+
+    setSegundos(
+      String(
+        total % 60
+      )
+    );
+
+  }
+
+
+  // ===================================================
+  // CRONÔMETRO
+  // ===================================================
+
+  useEffect(() => {
+
+    if (!rodando)
+      return;
+
+
+    if (
+      tempoRestante <= 0
+    ) {
+
+      setRodando(false);
+
+
+      // O cronômetro não tenta conectar sozinho.
+      // Só dispara se já existir conexão.
+
+      ativarArduino(false);
+
+
+      return;
+
+    }
+
+
+    const intervalo =
+      setInterval(() => {
+
+        setTempoRestante(
+          atual =>
+            Math.max(
+              0,
+              atual - 1
+            )
+        );
+
+      }, 1000);
+
+
+    return () =>
+      clearInterval(
+        intervalo
       );
 
-    const resto =
-      segundos % 60;
+  }, [
+    rodando,
+    tempoRestante,
+  ]);
 
 
-    setMinutosInput(
-      String(minutos)
-    );
+  // ===================================================
+  // FORMATAR TEMPO
+  // ===================================================
 
-    setSegundosInput(
-      String(resto)
+  function formatarTempo(
+    total
+  ) {
+
+    const min =
+      Math.floor(
+        total / 60
+      );
+
+    const seg =
+      total % 60;
+
+
+    return (
+      String(min).padStart(
+        2,
+        '0'
+      ) +
+      ':' +
+      String(seg).padStart(
+        2,
+        '0'
+      )
     );
 
   }
 
 
-  // ===========================================
-  // ZERAR
-  // ===========================================
-
-  function zerarCronometro() {
-
-    setRodando(false);
-
-    setTempoRestante(
-      tempoTotal
-    );
-
-  }
-
-
-  // ===========================================
-  // PROGRESSO
-  // ===========================================
-
-  const progresso =
-    tempoTotal > 0
-      ? tempoRestante /
-        tempoTotal
-      : 0;
-
-
-  // ===========================================
+  // ===================================================
   // INTERFACE
-  // ===========================================
+  // ===================================================
 
   return (
 
-    <ScrollView
-
+    <View
       style={[
-        styles.scrollView,
+        styles.container,
         {
           backgroundColor:
             tema.fundo,
         },
       ]}
-
-      contentContainerStyle={
-        styles.scrollConteudo
-      }
-
-      keyboardShouldPersistTaps="handled"
-
     >
 
-      {/* =================================== */}
-      {/* CABEÇALHO */}
-      {/* =================================== */}
+      <ScrollView
 
-      <Text
-        style={[
-          styles.titulo,
-          {
-            color:
-              tema.texto,
-          },
-        ]}
+        showsVerticalScrollIndicator={
+          false
+        }
+
+        contentContainerStyle={
+          styles.scroll
+        }
+
       >
-
-        Demonstração
-
-      </Text>
-
-
-      <Text
-        style={[
-          styles.subtitulo,
-          {
-            color:
-              tema.textoSecundario,
-          },
-        ]}
-      >
-
-        Teste do alerta do dispensador
-
-      </Text>
-
-
-      {/* =================================== */}
-      {/* ESTADO DO ARDUINO */}
-      {/* =================================== */}
-
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor:
-              tema.card,
-
-            borderColor:
-              tema.borda,
-          },
-        ]}
-      >
-
-        <Text
-          style={[
-            styles.tituloCard,
-            {
-              color:
-                tema.texto,
-            },
-          ]}
-        >
-
-          Estado do Arduino
-
-        </Text>
-
 
         {/* ================================= */}
-        {/* CÍRCULOS */}
+        {/* CABEÇALHO */}
         {/* ================================= */}
 
         <View
           style={
-            styles.componentesLinha
+            styles.cabecalho
           }
         >
 
-          {/* LED */}
-
-          <View
-            style={
-              styles.componente
-            }
-          >
-
-            <View
-              style={[
-                styles.circuloComponente,
-                {
-                  backgroundColor:
-                    ledLigado
-                      ? tema.destaque
-                      : tema.fundo,
-
-                  borderColor:
-                    ledLigado
-                      ? tema.destaque
-                      : tema.borda,
-                },
-              ]}
-            >
-
-              <Text
-                style={
-                  styles.iconeCirculo
-                }
-              >
-
-                💡
-
-              </Text>
-
-            </View>
-
-
-            <Text
-              style={[
-                styles.nomeComponente,
-                {
-                  color:
-                    tema.texto,
-                },
-              ]}
-            >
-
-              LED
-
-            </Text>
-
-
-            <Text
-              style={[
-                styles.estadoComponente,
-                {
-                  color:
-                    ledLigado
-                      ? '#22C55E'
-                      : tema.textoSecundario,
-                },
-              ]}
-            >
-
+          <Text
+            style={[
+              styles.titulo,
               {
-                ledLigado
-                  ? 'Ativo'
-                  : 'Desligado'
-              }
-
-            </Text>
-
-          </View>
-
-
-          {/* BUZZER */}
-
-          <View
-            style={
-              styles.componente
-            }
+                color:
+                  tema.texto,
+              },
+            ]}
           >
-
-            <View
-              style={[
-                styles.circuloComponente,
-                {
-                  backgroundColor:
-                    buzzerLigado
-                      ? tema.destaque
-                      : tema.fundo,
-
-                  borderColor:
-                    buzzerLigado
-                      ? tema.destaque
-                      : tema.borda,
-                },
-              ]}
-            >
-
-              <Text
-                style={
-                  styles.iconeCirculo
-                }
-              >
-
-                🔊
-
-              </Text>
-
-            </View>
+            Demonstração
+          </Text>
 
 
-            <Text
-              style={[
-                styles.nomeComponente,
-                {
-                  color:
-                    tema.texto,
-                },
-              ]}
-            >
-
-              Buzzer
-
-            </Text>
-
-
-            <Text
-              style={[
-                styles.estadoComponente,
-                {
-                  color:
-                    buzzerLigado
-                      ? '#22C55E'
-                      : tema.textoSecundario,
-                },
-              ]}
-            >
-
+          <Text
+            style={[
+              styles.subtitulo,
               {
-                buzzerLigado
-                  ? 'Ativo'
-                  : 'Desligado'
-              }
-
-            </Text>
-
-          </View>
-
-
-          {/* VIBRAÇÃO */}
-
-          <View
-            style={
-              styles.componente
-            }
+                color:
+                  tema.textoSecundario,
+              },
+            ]}
           >
-
-            <View
-              style={[
-                styles.circuloComponente,
-                {
-                  backgroundColor:
-                    vibradorLigado
-                      ? tema.destaque
-                      : tema.fundo,
-
-                  borderColor:
-                    vibradorLigado
-                      ? tema.destaque
-                      : tema.borda,
-                },
-              ]}
-            >
-
-              <Text
-                style={
-                  styles.iconeCirculo
-                }
-              >
-
-                📳
-
-              </Text>
-
-            </View>
-
-
-            <Text
-              style={[
-                styles.nomeComponente,
-                {
-                  color:
-                    tema.texto,
-                },
-              ]}
-            >
-
-              Vibração
-
-            </Text>
-
-
-            <Text
-              style={[
-                styles.estadoComponente,
-                {
-                  color:
-                    vibradorLigado
-                      ? '#22C55E'
-                      : tema.textoSecundario,
-                },
-              ]}
-            >
-
-              {
-                vibradorLigado
-                  ? 'Ativo'
-                  : 'Desligado'
-              }
-
-            </Text>
-
-          </View>
+            Teste do alerta do dispensador
+          </Text>
 
         </View>
 
 
         {/* ================================= */}
-        {/* STATUS */}
+        {/* ESTADO DO ARDUINO */}
         {/* ================================= */}
 
         <View
           style={[
-            styles.statusArduino,
+            styles.card,
             {
               backgroundColor:
-                tema.fundo,
+                tema.card,
 
               borderColor:
                 tema.borda,
@@ -1097,169 +833,438 @@ export default function PaginaTres() {
           ]}
         >
 
-          <View
-            style={[
-              styles.bolinhaStatus,
-              {
-                backgroundColor:
-                  arduinoAtivo
-                    ? '#22C55E'
-                    : tema.textoSecundario,
-              },
-            ]}
-          />
-
-
           <Text
             style={[
-              styles.textoStatusArduino,
+              styles.tituloCard,
               {
                 color:
                   tema.texto,
               },
             ]}
           >
-
-            {
-              arduinoAtivo
-                ? 'Arduino ativo'
-                : 'Arduino aguardando'
-            }
-
+            Estado do Arduino
           </Text>
 
-        </View>
 
-
-        {/* ================================= */}
-        {/* ATIVAR ARDUINO */}
-        {/* ================================= */}
-
-        <TouchableOpacity
-
-          style={[
-            styles.botaoArduino,
-            {
-              backgroundColor:
-                arduinoAtivo
-                  ? tema.alerta
-                  : tema.destaque,
-            },
-          ]}
-
-          onPress={
-            arduinoAtivo
-              ? pararArduino
-              : () =>
-                  ativarArduino(true)
-          }
-
-        >
-
-          <Text
-            style={
-              styles.textoBotaoPrincipal
-            }
-          >
-
-            {
-              arduinoAtivo
-                ? 'Parar Arduino'
-                : 'Ativar Arduino agora'
-            }
-
-          </Text>
-
-        </TouchableOpacity>
-
-
-        {/* ================================= */}
-        {/* BLUETOOTH */}
-        {/* ================================= */}
-
-        <View
-          style={[
-            styles.bluetoothManual,
-            {
-              borderTopColor:
-                tema.borda,
-            },
-          ]}
-        >
-
-          <Text
-            style={[
-              styles.bluetoothTitulo,
-              {
-                color:
-                  tema.texto,
-              },
-            ]}
-          >
-
-            Bluetooth
-
-          </Text>
-
+          {/* ================================= */}
+          {/* ATUADORES */}
+          {/* ================================= */}
 
           <View
             style={
-              styles.bluetoothStatusLinha
+              styles.atuadores
             }
           >
 
-            <View
-              style={[
-                styles.bolinhaStatus,
-                {
-                  backgroundColor:
-                    bluetoothReal
-                      ? '#22C55E'
-                      : tema.textoSecundario,
-                },
-              ]}
-            />
+            {/* LED */}
 
+            <Pressable
 
-            <View
-              style={{
-                flex: 1,
-              }}
+              onPress={
+                proximaCor
+              }
+
+              style={
+                styles.atuador
+              }
+
             >
+
+              <View
+                style={[
+                  styles.circulo,
+
+                  {
+                    borderColor:
+                      tema.borda,
+
+                    backgroundColor:
+                      ledAtivo
+                        ? corSelecionada.cor
+                        : tema.fundo,
+                  },
+                ]}
+              >
+
+                <Text
+                  style={
+                    styles.emoji
+                  }
+                >
+                  💡
+                </Text>
+
+              </View>
+
 
               <Text
                 style={[
-                  styles.bluetoothStatusTitulo,
+                  styles.nomeAtuador,
                   {
                     color:
                       tema.texto,
                   },
                 ]}
               >
-
-                {
-                  bluetoothReal
-                    ? 'HC-05 conectado'
-                    : 'HC-05 desconectado'
-                }
-
+                LED
               </Text>
 
 
               <Text
                 style={[
-                  styles.bluetoothDescricao,
+                  styles.estadoAtuador,
                   {
                     color:
                       tema.textoSecundario,
                   },
                 ]}
               >
+                {ledAtivo
+                  ? 'Ligado'
+                  : 'Desligado'}
+              </Text>
+
+
+              <Text
+                style={[
+                  styles.opcaoAtuador,
+                  {
+                    color:
+                      tema.destaque,
+                  },
+                ]}
+              >
+                {
+                  corSelecionada.nome
+                }
+              </Text>
+
+            </Pressable>
+
+
+            {/* BUZZER */}
+
+            <Pressable
+
+              onPress={
+                proximoTom
+              }
+
+              style={
+                styles.atuador
+              }
+
+            >
+
+              <View
+                style={[
+                  styles.circulo,
+
+                  {
+                    borderColor:
+                      tema.borda,
+
+                    backgroundColor:
+                      buzzerAtivo
+                        ? tema.destaque
+                        : tema.fundo,
+                  },
+                ]}
+              >
+
+                <Text
+                  style={
+                    styles.emoji
+                  }
+                >
+                  🔊
+                </Text>
+
+              </View>
+
+
+              <Text
+                style={[
+                  styles.nomeAtuador,
+                  {
+                    color:
+                      tema.texto,
+                  },
+                ]}
+              >
+                Buzzer
+              </Text>
+
+
+              <Text
+                style={[
+                  styles.estadoAtuador,
+                  {
+                    color:
+                      tema.textoSecundario,
+                  },
+                ]}
+              >
+                {buzzerAtivo
+                  ? 'Ligado'
+                  : 'Desligado'}
+              </Text>
+
+
+              <Text
+                style={[
+                  styles.opcaoAtuador,
+                  {
+                    color:
+                      tema.destaque,
+                  },
+                ]}
+              >
+                {
+                  tomSelecionado.nome
+                }
+              </Text>
+
+            </Pressable>
+
+
+            {/* VIBRAÇÃO */}
+
+            <Pressable
+
+              onPress={
+                proximaVibracao
+              }
+
+              style={
+                styles.atuador
+              }
+
+            >
+
+              <View
+                style={[
+                  styles.circulo,
+
+                  {
+                    borderColor:
+                      tema.borda,
+
+                    backgroundColor:
+                      vibracaoAtiva
+                        ? tema.destaque
+                        : tema.fundo,
+                  },
+                ]}
+              >
+
+                <Text
+                  style={
+                    styles.emoji
+                  }
+                >
+                  📳
+                </Text>
+
+              </View>
+
+
+              <Text
+                style={[
+                  styles.nomeAtuador,
+                  {
+                    color:
+                      tema.texto,
+                  },
+                ]}
+              >
+                Vibração
+              </Text>
+
+
+              <Text
+                style={[
+                  styles.estadoAtuador,
+                  {
+                    color:
+                      tema.textoSecundario,
+                  },
+                ]}
+              >
+                {vibracaoAtiva
+                  ? 'Ligada'
+                  : 'Desligada'}
+              </Text>
+
+
+              <Text
+                style={[
+                  styles.opcaoAtuador,
+                  {
+                    color:
+                      tema.destaque,
+                  },
+                ]}
+              >
+                {
+                  vibracaoSelecionada.nome
+                }
+              </Text>
+
+            </Pressable>
+
+          </View>
+
+
+          {/* ================================= */}
+          {/* STATUS */}
+          {/* ================================= */}
+
+          <View
+            style={
+              styles.statusLinha
+            }
+          >
+
+            <View
+              style={[
+                styles.statusPonto,
+                {
+                  backgroundColor:
+                    arduinoAtivo
+                      ? '#22C55E'
+                      : '#9CA3AF',
+                },
+              ]}
+            />
+
+
+            <Text
+              style={[
+                styles.statusTexto,
+                {
+                  color:
+                    tema.textoSecundario,
+                },
+              ]}
+            >
+              {arduinoAtivo
+                ? 'Arduino ativo'
+                : 'Arduino aguardando'}
+            </Text>
+
+          </View>
+
+
+          {/* ================================= */}
+          {/* BOTÃO PRINCIPAL */}
+          {/* ================================= */}
+
+          <Pressable
+
+            onPress={
+              arduinoAtivo
+                ? pararArduino
+                : () =>
+                    ativarArduino(
+                      true
+                    )
+            }
+
+            style={[
+              styles.botaoPrincipal,
+
+              {
+                backgroundColor:
+                  arduinoAtivo
+                    ? '#EF4444'
+                    : tema.destaque,
+              },
+            ]}
+
+          >
+
+            <Text
+              style={
+                styles.textoBotaoPrincipal
+              }
+            >
+              {arduinoAtivo
+                ? 'Parar Arduino'
+                : 'Ativar Arduino agora'}
+            </Text>
+
+          </Pressable>
+
+
+          {/* ================================= */}
+          {/* BLUETOOTH */}
+          {/* ================================= */}
+
+          <View
+            style={[
+              styles.divisoria,
+              {
+                backgroundColor:
+                  tema.borda,
+              },
+            ]}
+          />
+
+
+          <View
+            style={
+              styles.statusLinha
+            }
+          >
+
+            <View
+              style={[
+                styles.statusPonto,
 
                 {
-                  mensagemBluetooth
-                }
+                  backgroundColor:
+                    conectado
+                      ? '#22C55E'
+                      : '#9CA3AF',
+                },
+              ]}
+            />
 
+
+            <View
+              style={
+                styles.bluetoothTexto
+              }
+            >
+
+              <Text
+                style={[
+                  styles.bluetoothTitulo,
+
+                  {
+                    color:
+                      tema.texto,
+                  },
+                ]}
+              >
+                {conectado
+                  ? 'HC-05 conectado'
+                  : 'HC-05 desconectado'}
+              </Text>
+
+
+              <Text
+                style={[
+                  styles.bluetoothMensagem,
+
+                  {
+                    color:
+                      tema.textoSecundario,
+                  },
+                ]}
+              >
+                {mensagemBluetooth}
               </Text>
 
             </View>
@@ -1267,404 +1272,221 @@ export default function PaginaTres() {
           </View>
 
 
-          <TouchableOpacity
-
-            style={[
-              styles.botaoConexao,
-              {
-                backgroundColor:
-                  bluetoothReal
-                    ? tema.alerta
-                    : tema.destaque,
-
-                opacity:
-                  conectandoBluetooth
-                    ? 0.65
-                    : 1,
-              },
-            ]}
-
-            disabled={
-              conectandoBluetooth
-            }
+          <Pressable
 
             onPress={
-              alternarConexaoHC05
+              conectado
+                ? desconectar
+                : conectar
             }
+
+            style={[
+              styles.botaoBluetooth,
+
+              {
+                borderColor:
+                  tema.destaque,
+              },
+            ]}
 
           >
 
             <Text
-              style={
-                styles.textoBotaoPrincipal
-              }
+              style={[
+                styles.textoBotaoBluetooth,
+
+                {
+                  color:
+                    tema.destaque,
+                },
+              ]}
             >
-
-              {
-                conectandoBluetooth
-                  ? 'Conectando...'
-                  : bluetoothReal
-                    ? 'Desconectar HC-05'
-                    : 'Conectar HC-05'
-              }
-
+              {conectado
+                ? 'Desconectar HC-05'
+                : 'Conectar HC-05'}
             </Text>
 
-          </TouchableOpacity>
+          </Pressable>
 
         </View>
 
-      </View>
 
-
-      {/* =================================== */}
-      {/* CRONÔMETRO */}
-      {/* =================================== */}
-
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor:
-              tema.card,
-
-            borderColor:
-              tema.borda,
-          },
-        ]}
-      >
-
-        <Text
-          style={[
-            styles.tituloCard,
-            {
-              color:
-                tema.texto,
-            },
-          ]}
-        >
-
-          Cronômetro
-
-        </Text>
-
-
-        <Text
-          style={[
-            styles.tempo,
-            {
-              color:
-                tempoRestante === 0
-                  ? tema.alerta
-                  : tema.texto,
-            },
-          ]}
-        >
-
-          {
-            formatarTempo(
-              tempoRestante
-            )
-          }
-
-        </Text>
-
-
-        {/* BARRA DE PROGRESSO */}
+        {/* ================================= */}
+        {/* CRONÔMETRO */}
+        {/* ================================= */}
 
         <View
           style={[
-            styles.barraFundo,
+            styles.card,
+
             {
               backgroundColor:
+                tema.card,
+
+              borderColor:
                 tema.borda,
             },
           ]}
         >
 
-          <View
+          <Text
             style={[
-              styles.barraProgresso,
-              {
-                backgroundColor:
-                  tema.destaque,
+              styles.tituloCard,
 
-                width:
-                  `${Math.max(
-                    0,
-                    Math.min(
-                      progresso * 100,
-                      100
-                    )
-                  )}%`,
+              {
+                color:
+                  tema.texto,
               },
             ]}
-          />
-
-        </View>
-
-
-        {/* INPUTS */}
-
-        <View
-          style={
-            styles.inputsLinha
-          }
-        >
-
-          <View
-            style={
-              styles.inputGrupo
-            }
           >
-
-            <Text
-              style={[
-                styles.label,
-                {
-                  color:
-                    tema.textoSecundario,
-                },
-              ]}
-            >
-
-              Minutos
-
-            </Text>
-
-
-            <TextInput
-
-              value={
-                minutosInput
-              }
-
-              onChangeText={
-                setMinutosInput
-              }
-
-              keyboardType="number-pad"
-
-              style={[
-                styles.input,
-                {
-                  backgroundColor:
-                    tema.fundo,
-
-                  borderColor:
-                    tema.borda,
-
-                  color:
-                    tema.texto,
-                },
-              ]}
-
-            />
-
-          </View>
-
-
-          <View
-            style={
-              styles.inputGrupo
-            }
-          >
-
-            <Text
-              style={[
-                styles.label,
-                {
-                  color:
-                    tema.textoSecundario,
-                },
-              ]}
-            >
-
-              Segundos
-
-            </Text>
-
-
-            <TextInput
-
-              value={
-                segundosInput
-              }
-
-              onChangeText={
-                setSegundosInput
-              }
-
-              keyboardType="number-pad"
-
-              style={[
-                styles.input,
-                {
-                  backgroundColor:
-                    tema.fundo,
-
-                  borderColor:
-                    tema.borda,
-
-                  color:
-                    tema.texto,
-                },
-              ]}
-
-            />
-
-          </View>
-
-        </View>
-
-
-        {/* APLICAR TEMPO */}
-
-        <TouchableOpacity
-
-          style={[
-            styles.botaoPrincipal,
-            {
-              backgroundColor:
-                tema.destaque,
-            },
-          ]}
-
-          onPress={
-            aplicarTempo
-          }
-
-        >
-
-          <Text
-            style={
-              styles.textoBotaoPrincipal
-            }
-          >
-
-            Aplicar tempo
-
+            Cronômetro
           </Text>
 
-        </TouchableOpacity>
 
+          <Text
+            style={[
+              styles.tempo,
 
-        {/* ATALHOS */}
-
-        <Text
-          style={[
-            styles.labelAtalhos,
+              {
+                color:
+                  tema.destaque,
+              },
+            ]}
+          >
             {
-              color:
-                tema.textoSecundario,
-            },
-          ]}
-        >
-
-          Atalhos
-
-        </Text>
+              formatarTempo(
+                tempoRestante
+              )
+            }
+          </Text>
 
 
-        <View
-          style={
-            styles.atalhos
-          }
-        >
+          <View
+            style={
+              styles.camposTempo
+            }
+          >
 
-          {[
-            [5, '5s'],
-            [10, '10s'],
-            [30, '30s'],
-            [60, '1min'],
-          ].map(
-            ([segundos, texto]) => (
+            <View
+              style={
+                styles.campoGrupo
+              }
+            >
 
-              <TouchableOpacity
+              <Text
+                style={[
+                  styles.label,
 
-                key={
-                  segundos
+                  {
+                    color:
+                      tema.textoSecundario,
+                  },
+                ]}
+              >
+                Minutos
+              </Text>
+
+
+              <TextInput
+
+                value={
+                  minutos
                 }
 
+                onChangeText={
+                  setMinutos
+                }
+
+                keyboardType="number-pad"
+
                 style={[
-                  styles.botaoAtalho,
+                  styles.input,
+
                   {
-                    backgroundColor:
-                      tema.fundo,
+                    color:
+                      tema.texto,
 
                     borderColor:
                       tema.borda,
+
+                    backgroundColor:
+                      tema.fundo,
                   },
                 ]}
 
-                onPress={() =>
-                  aplicarAtalho(
-                    segundos
-                  )
+              />
+
+            </View>
+
+
+            <View
+              style={
+                styles.campoGrupo
+              }
+            >
+
+              <Text
+                style={[
+                  styles.label,
+
+                  {
+                    color:
+                      tema.textoSecundario,
+                  },
+                ]}
+              >
+                Segundos
+              </Text>
+
+
+              <TextInput
+
+                value={
+                  segundos
                 }
 
-              >
+                onChangeText={
+                  setSegundos
+                }
 
-                <Text
-                  style={[
-                    styles.textoAtalho,
-                    {
-                      color:
-                        tema.texto,
-                    },
-                  ]}
-                >
+                keyboardType="number-pad"
 
-                  {texto}
+                style={[
+                  styles.input,
 
-                </Text>
+                  {
+                    color:
+                      tema.texto,
 
-              </TouchableOpacity>
+                    borderColor:
+                      tema.borda,
 
-            )
-          )}
+                    backgroundColor:
+                      tema.fundo,
+                  },
+                ]}
 
-        </View>
+              />
+
+            </View>
+
+          </View>
 
 
-        {/* CONTROLES */}
+          <Pressable
 
-        <View
-          style={
-            styles.controles
-          }
-        >
-
-          <TouchableOpacity
+            onPress={
+              aplicarTempo
+            }
 
             style={[
-              styles.botaoPrincipal,
-              styles.botaoControle,
+              styles.botaoAplicar,
+
               {
                 backgroundColor:
                   tema.destaque,
               },
             ]}
-
-            onPress={() => {
-
-              if (
-                tempoRestante <= 0
-              ) {
-
-                setTempoRestante(
-                  tempoTotal
-                );
-
-              }
-
-
-              setRodando(
-                anterior =>
-                  !anterior
-              );
-
-            }}
 
           >
 
@@ -1673,540 +1495,458 @@ export default function PaginaTres() {
                 styles.textoBotaoPrincipal
               }
             >
-
-              {
-                rodando
-                  ? 'Pausar'
-                  : 'Iniciar'
-              }
-
+              Aplicar tempo
             </Text>
 
-          </TouchableOpacity>
+          </Pressable>
 
 
-          <TouchableOpacity
+          {/* ================================= */}
+          {/* TEMPOS RÁPIDOS */}
+          {/* ================================= */}
 
-            style={[
-              styles.botaoSecundario,
-              styles.botaoControle,
-              {
-                borderColor:
-                  tema.borda,
-
-                backgroundColor:
-                  tema.fundo,
-              },
-            ]}
-
-            onPress={
-              zerarCronometro
+          <View
+            style={
+              styles.temposRapidos
             }
-
           >
 
-            <Text
+            {[
+              {
+                texto: '5s',
+                valor: 5,
+              },
+              {
+                texto: '10s',
+                valor: 10,
+              },
+              {
+                texto: '30s',
+                valor: 30,
+              },
+              {
+                texto: '1min',
+                valor: 60,
+              },
+
+            ].map(
+              item => (
+
+                <Pressable
+
+                  key={
+                    item.texto
+                  }
+
+                  onPress={() =>
+                    tempoRapido(
+                      item.valor
+                    )
+                  }
+
+                  style={[
+                    styles.botaoRapido,
+
+                    {
+                      borderColor:
+                        tema.borda,
+
+                      backgroundColor:
+                        tema.fundo,
+                    },
+                  ]}
+
+                >
+
+                  <Text
+                    style={[
+                      styles.textoRapido,
+
+                      {
+                        color:
+                          tema.texto,
+                      },
+                    ]}
+                  >
+                    {item.texto}
+                  </Text>
+
+                </Pressable>
+
+              )
+            )}
+
+          </View>
+
+
+          {/* ================================= */}
+          {/* CONTROLES */}
+          {/* ================================= */}
+
+          <View
+            style={
+              styles.controlesCronometro
+            }
+          >
+
+            <Pressable
+
+              onPress={() => {
+
+                if (
+                  tempoRestante > 0
+                ) {
+
+                  setRodando(
+                    atual =>
+                      !atual
+                  );
+
+                }
+
+              }}
+
               style={[
-                styles.textoBotaoSecundario,
+                styles.botaoCronometro,
+
                 {
-                  color:
-                    tema.texto,
+                  backgroundColor:
+                    tema.destaque,
                 },
               ]}
+
             >
 
-              Zerar
+              <Text
+                style={
+                  styles.textoBotaoPrincipal
+                }
+              >
+                {rodando
+                  ? 'Pausar'
+                  : 'Iniciar'}
+              </Text>
 
-            </Text>
+            </Pressable>
 
-          </TouchableOpacity>
+
+            <Pressable
+
+              onPress={() => {
+
+                setRodando(false);
+
+                setTempoRestante(
+                  0
+                );
+
+              }}
+
+              style={[
+                styles.botaoCronometro,
+
+                styles.botaoReset,
+
+                {
+                  borderColor:
+                    tema.borda,
+
+                  backgroundColor:
+                    tema.fundo,
+                },
+              ]}
+
+            >
+
+              <Text
+                style={[
+                  styles.textoReset,
+
+                  {
+                    color:
+                      tema.texto,
+                  },
+                ]}
+              >
+                Reset
+              </Text>
+
+            </Pressable>
+
+          </View>
 
         </View>
 
-      </View>
+      </ScrollView>
 
-    </ScrollView>
+    </View>
 
   );
 
 }
 
 
-// =============================================
+// =====================================================
 // ESTILOS
-// =============================================
+// =====================================================
 
 const styles =
   StyleSheet.create({
 
-    scrollView: {
-
+    container: {
       flex: 1,
-
     },
 
 
-    scrollConteudo: {
+    scroll: {
+      padding: 18,
+      paddingBottom: 40,
+    },
 
-      paddingHorizontal: 18,
 
-      paddingTop: 18,
-
-      paddingBottom: 30,
-
+    cabecalho: {
+      marginBottom: 20,
     },
 
 
     titulo: {
-
       fontSize: 28,
-
       fontWeight: '700',
-
     },
 
 
     subtitulo: {
-
       fontSize: 14,
-
-      marginTop: 4,
-
-      marginBottom: 18,
-
+      marginTop: 3,
     },
 
 
     card: {
-
       borderWidth: 1,
-
       borderRadius: 18,
-
-      padding: 18,
-
-      marginBottom: 16,
-
+      padding: 16,
+      marginBottom: 14,
     },
 
 
     tituloCard: {
-
-      fontSize: 18,
-
+      fontSize: 17,
       fontWeight: '700',
-
-      marginBottom: 16,
-
-    },
-
-
-    // =========================================
-    // COMPONENTES EM CÍRCULOS
-    // =========================================
-
-    componentesLinha: {
-
-      flexDirection: 'row',
-
-      justifyContent: 'space-around',
-
-      alignItems: 'flex-start',
-
-      marginTop: 4,
-
       marginBottom: 18,
-
     },
 
 
-    componente: {
+    atuadores: {
+      flexDirection: 'row',
+      justifyContent:
+        'space-around',
+      marginBottom: 20,
+    },
 
+
+    atuador: {
       alignItems: 'center',
-
       width: 90,
-
     },
 
 
-    circuloComponente: {
-
+    circulo: {
       width: 65,
-
       height: 65,
-
       borderRadius: 33,
-
       borderWidth: 1,
-
+      justifyContent:
+        'center',
       alignItems: 'center',
-
-      justifyContent: 'center',
-
-      marginBottom: 8,
-
+      marginBottom: 7,
     },
 
 
-    iconeCirculo: {
-
-      fontSize: 28,
-
+    emoji: {
+      fontSize: 25,
     },
 
 
-    nomeComponente: {
-
-      fontSize: 14,
-
-      fontWeight: '600',
-
-      textAlign: 'center',
-
-    },
-
-
-    estadoComponente: {
-
-      fontSize: 12,
-
-      marginTop: 3,
-
-      textAlign: 'center',
-
-    },
-
-
-    // =========================================
-    // STATUS DO ARDUINO
-    // =========================================
-
-    statusArduino: {
-
-      borderWidth: 1,
-
-      borderRadius: 12,
-
-      flexDirection: 'row',
-
-      alignItems: 'center',
-
-      paddingHorizontal: 14,
-
-      paddingVertical: 11,
-
-      marginTop: 4,
-
-    },
-
-
-    bolinhaStatus: {
-
-      width: 10,
-
-      height: 10,
-
-      borderRadius: 5,
-
-      marginRight: 9,
-
-    },
-
-
-    textoStatusArduino: {
-
-      fontSize: 14,
-
-      fontWeight: '600',
-
-    },
-
-
-    botaoArduino: {
-
-      borderRadius: 12,
-
-      paddingVertical: 14,
-
-      alignItems: 'center',
-
-      justifyContent: 'center',
-
-      marginTop: 14,
-
-    },
-
-
-    // =========================================
-    // BLUETOOTH
-    // =========================================
-
-    bluetoothManual: {
-
-      marginTop: 20,
-
-      paddingTop: 18,
-
-      borderTopWidth: 1,
-
-    },
-
-
-    bluetoothTitulo: {
-
-      fontSize: 16,
-
+    nomeAtuador: {
+      fontSize: 13,
       fontWeight: '700',
+    },
 
+
+    estadoAtuador: {
+      fontSize: 11,
+      marginTop: 2,
+    },
+
+
+    opcaoAtuador: {
+      fontSize: 11,
+      fontWeight: '600',
+      marginTop: 2,
+      textAlign: 'center',
+    },
+
+
+    statusLinha: {
+      flexDirection: 'row',
+      alignItems: 'center',
       marginBottom: 12,
-
     },
 
 
-    bluetoothStatusLinha: {
-
-      flexDirection: 'row',
-
-      alignItems: 'center',
-
+    statusPonto: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      marginRight: 9,
     },
 
 
-    bluetoothStatusTitulo: {
-
-      fontSize: 15,
-
-      fontWeight: '600',
-
-    },
-
-
-    bluetoothDescricao: {
-
-      fontSize: 13,
-
-      marginTop: 3,
-
-      lineHeight: 18,
-
-    },
-
-
-    botaoConexao: {
-
-      borderRadius: 12,
-
-      paddingVertical: 14,
-
-      alignItems: 'center',
-
-      justifyContent: 'center',
-
-      marginTop: 14,
-
-    },
-
-
-    // =========================================
-    // TIMER
-    // =========================================
-
-    tempo: {
-
-      fontSize: 54,
-
-      fontWeight: '700',
-
-      textAlign: 'center',
-
-      marginVertical: 12,
-
-      fontVariant: [
-        'tabular-nums',
-      ],
-
-    },
-
-
-    barraFundo: {
-
-      height: 7,
-
-      borderRadius: 20,
-
-      overflow: 'hidden',
-
-      marginBottom: 22,
-
-    },
-
-
-    barraProgresso: {
-
-      height: '100%',
-
-      borderRadius: 20,
-
-    },
-
-
-    inputsLinha: {
-
-      flexDirection: 'row',
-
-      gap: 12,
-
-    },
-
-
-    inputGrupo: {
-
-      flex: 1,
-
-    },
-
-
-    label: {
-
-      fontSize: 13,
-
-      marginBottom: 6,
-
-    },
-
-
-    input: {
-
-      borderWidth: 1,
-
-      borderRadius: 12,
-
-      paddingHorizontal: 14,
-
-      paddingVertical: 11,
-
-      fontSize: 16,
-
-      textAlign: 'center',
-
+    statusTexto: {
+      fontSize: 14,
     },
 
 
     botaoPrincipal: {
-
-      borderRadius: 12,
-
-      paddingVertical: 13,
-
+      borderRadius: 14,
+      paddingVertical: 15,
       alignItems: 'center',
-
-      justifyContent: 'center',
-
-      marginTop: 14,
-
     },
 
 
     textoBotaoPrincipal: {
-
       color: '#FFFFFF',
-
       fontSize: 15,
-
       fontWeight: '700',
-
     },
 
 
-    labelAtalhos: {
-
-      marginTop: 20,
-
-      marginBottom: 9,
-
-      fontSize: 13,
-
-      textAlign: 'center',
-
+    divisoria: {
+      height: 1,
+      marginVertical: 18,
     },
 
 
-    atalhos: {
-
-      flexDirection: 'row',
-
-      justifyContent: 'center',
-
-      flexWrap: 'wrap',
-
-      gap: 8,
-
-    },
-
-
-    botaoAtalho: {
-
-      borderWidth: 1,
-
-      borderRadius: 20,
-
-      paddingHorizontal: 15,
-
-      paddingVertical: 8,
-
-    },
-
-
-    textoAtalho: {
-
-      fontSize: 14,
-
-      fontWeight: '600',
-
-    },
-
-
-    controles: {
-
-      flexDirection: 'row',
-
-      gap: 10,
-
-      marginTop: 4,
-
-    },
-
-
-    botaoControle: {
-
+    bluetoothTexto: {
       flex: 1,
-
     },
 
 
-    botaoSecundario: {
+    bluetoothTitulo: {
+      fontSize: 14,
+      fontWeight: '700',
+    },
 
-      borderRadius: 12,
 
-      paddingVertical: 13,
+    bluetoothMensagem: {
+      fontSize: 12,
+      marginTop: 2,
+    },
 
-      alignItems: 'center',
 
-      justifyContent: 'center',
-
-      marginTop: 14,
-
+    botaoBluetooth: {
       borderWidth: 1,
-
+      borderRadius: 14,
+      paddingVertical: 13,
+      alignItems: 'center',
     },
 
 
-    textoBotaoSecundario: {
+    textoBotaoBluetooth: {
+      fontSize: 14,
+      fontWeight: '700',
+    },
 
-      fontSize: 15,
 
+    tempo: {
+      fontSize: 42,
+      fontWeight: '700',
+      textAlign: 'center',
+      marginVertical: 15,
+    },
+
+
+    camposTempo: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+
+
+    campoGrupo: {
+      flex: 1,
+    },
+
+
+    label: {
+      fontSize: 12,
+      marginBottom: 5,
+    },
+
+
+    input: {
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      fontSize: 16,
+      textAlign: 'center',
+    },
+
+
+    botaoAplicar: {
+      borderRadius: 14,
+      paddingVertical: 13,
+      alignItems: 'center',
+      marginTop: 12,
+    },
+
+
+    temposRapidos: {
+      flexDirection: 'row',
+      justifyContent:
+        'center',
+      gap: 7,
+      marginTop: 14,
+    },
+
+
+    botaoRapido: {
+      borderWidth: 1,
+      borderRadius: 10,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+    },
+
+
+    textoRapido: {
+      fontSize: 12,
       fontWeight: '600',
+    },
 
+
+    controlesCronometro: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 15,
+    },
+
+
+    botaoCronometro: {
+      flex: 1,
+      borderRadius: 14,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+
+
+    botaoReset: {
+      borderWidth: 1,
+    },
+
+
+    textoReset: {
+      fontSize: 15,
+      fontWeight: '700',
     },
 
   });
